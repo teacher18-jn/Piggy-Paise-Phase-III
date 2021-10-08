@@ -1,0 +1,452 @@
+import React, { Component } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  SafeAreaView,
+  Platform,
+  StatusBar,
+  Alert,
+} from 'react-native';
+import ToggleSwitch from 'toggle-switch-react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { RFValue } from 'react-native-responsive-fontsize';
+import db from '../config';
+
+export default class BankIT extends Component {
+  constructor() {
+    super();
+    this.state = {
+      activitiesList: [],
+      approveFlag: false,
+      code: '',
+      selectedActivities: [],
+      cleanflag: false,
+      washFlag: false,
+      babySittingFlag: false,
+      otherFlag: false,
+      otherActivity: '',
+      isOnCleanToggleSwitch: false,
+      isOnWashToggleSwitch: false,
+      isOnBabyToggleSwitch: false,
+      isOnOthersToggleSwitch: false,
+      isClean: false,
+      isWash: false,
+      isBabysitting: false,
+      isOthers: false,
+      noOfActivities: 0,
+      others: '',
+      amountFromDB: 0,
+      approveEnabled: true,
+      choice: [],
+      activitiesListDB: [],
+      activityUpdated: false,
+      secretCodeFlag: true,
+    };
+    this.createList = this.createList.bind(this);
+    this.submit = this.submit.bind(this);
+    this.onToggle = this.onToggle.bind(this);
+    this.approve = this.approve.bind(this);
+    this.noApprove = this.noApprove.bind(this);
+    this.checkActivities = this.checkActivities.bind(this);
+  }
+
+  componentDidMount() {
+    //var activitiesListDB = [];
+
+    this.createList();
+  }
+
+  createList = async () => {
+    var activitiesListDB;
+    var noOfActivities = 0;
+    var info = null;
+    await db.ref('Users/User1').on('value', (data) => {
+      info = data.val();
+    });
+
+    if (info.secretCode === 0) {
+      this.setState({ secretCodeFlag: false },function(){
+        console.log(this.state.secretCodeFlag);
+      });
+    } else {
+      this.setState({ activityUpdated: info.activityUpdated }, function () {
+        console.log(this.state.activityUpdated);
+      });
+
+      //console.log(noOfActivities);
+      this.setState({ noOfActivities: info.noOfActivities }, function () {
+        console.log(this.state.noOfActivities);
+      });
+
+      var ref = await db.ref('Users/User1/activity').on('value', (data) => {
+        activitiesListDB = data.val();
+      });
+      console.log(this.state.activitiesListDB);
+
+      this.setState({ activitiesListDB: activitiesListDB });
+
+      var activitiesList = [];
+      //activityDetails = this.state.activityList;
+      for (var i in activitiesListDB) {
+        activitiesList.push(activitiesListDB[i]);
+        if (activitiesListDB[i] === 'clean') {
+          this.setState({ cleanFlag: true });
+        } else if (activitiesListDB[i] === 'wash') {
+          this.setState({ washFlag: true });
+        } else if (activitiesListDB[i] === 'baby') {
+          this.setState({ babySittingFlag: true });
+        } else {
+          this.setState({ otherFlag: true });
+          this.setState({ otherActivity: activitiesListDB[i] });
+        }
+      }
+      this.setState({ activitiesList: activitiesList });
+
+      var totalAmountFromDB = 0;
+      var totalRef = db.ref('Users/User1/Total');
+      totalRef.on('value', (data) => {
+        totalAmountFromDB = data.val();
+      });
+      this.setState(
+        { amountFromDB: totalAmountFromDB, approveEnabled: true },
+        function () {
+          console.log(this.state.amountFromDB);
+        }
+      );
+    }
+  };
+
+  async submit() {
+    if (!this.state.code.trim()) {
+      alert('Please Enter Code');
+      return;
+    }
+     var secretCode = 0;
+      db.ref('Users/User1/secretCode').on('value', (data) => {
+        secretCode = data.val();
+      });
+    if (parseInt(this.state.code) === secretCode) {
+      //console.log("No of activities in submit : " + this.state.noOfActivities);
+      //console.log("aMount from DB " + this.state.amountFromDB)
+      var temp = 0;
+      db.ref('Users/User1/noOfActivities').on('value', (data) => {
+        temp = data.val();
+      });
+      console.log(
+        'Checking if no of activities updates: ' + this.state.noOfActivities
+      );
+      console.log('temp' + temp);
+      var amount = temp * 10 + this.state.amountFromDB;
+      var ref = await db.ref('Users/User1');
+      await ref.update({
+        Total: amount,
+      });
+
+      this.setState({ approveFlag: false });
+      this.setState({ noOfActivities: 0 });
+      this.setState({ activitiesList: [] });
+      this.setState({ cleanFlag: false });
+      this.setState({ washFlag: false });
+      this.setState({ babySittingFlag: false });
+      this.setState({ otherFlag: false });
+      this.setState({ activityUpdated: false });
+      var activityRef = db.ref('Users/User1');
+      activityRef.update({
+        activity: '',
+      });
+      db.ref('Users/User1').update({
+        activityUpdated: false,
+        noOfActivities: 0,
+      });
+      this.setState({ noOfActivities: 0 });
+      this.setState({ choice: [] });
+    } else {
+      alert('Code Incorrect');
+    }
+  }
+
+  onToggle(isOn, label) {
+    // console.log('Changed to ' + isOn);
+    if (label === 'clean') {
+      this.setState({ isClean: !this.state.isClean });
+    } else if (label === 'wash') {
+      console.log('wash yes');
+      this.setState({ isWash: !this.state.isWash });
+    } else if (label === 'baby') {
+      console.log('baby yes');
+      this.setState({ isBabysitting: !this.state.isBabysitting });
+    } else {
+      console.log('others yes');
+      this.setState({ isOthers: !this.state.isOthers });
+    }
+  }
+
+  checkActivities = () => {
+    var tempChoice = [];
+
+    tempChoice.push({ chore: 'Clean', value: this.state.isClean });
+    tempChoice.push({ chore: 'Wash', value: this.state.isWash });
+    tempChoice.push({ chore: 'Baby Sitting', value: this.state.isBabysitting });
+    tempChoice.push({ chore: this.state.others, value: this.state.isOthers });
+    console.log('tempchoice:' + tempChoice);
+    /*this.setState({ choice: tempChoice }, function(){
+      console.log(this.state.choice)
+    });*/
+
+    var activitySelected = [];
+    var count = 0;
+    tempChoice.map((item, index) => {
+      if (item.value === true) {
+        activitySelected.push(item.chore);
+        count += 1;
+        console.log('Chore approved' + item.chore);
+      }
+    });
+    db.ref('Users/User1').update({
+      activity: activitySelected,
+      noOfActivities: count,
+    });
+  };
+
+  approve = () => {
+    //this.setState({ enabled: false });
+    //this.setState({ approveEnabled: false });
+    console.log(
+      'approve display state no of act: ' + this.state.noOfActivities
+    );
+
+    var temp;
+    db.ref('Users/User1').on('value', (data) => {
+      temp = data.val();
+    });
+
+    if (temp.noOfActivities === 0) {
+      alert('Please Select the Activities to Approve');
+      return;
+    } else {
+      console.log(temp.length);
+      this.setState({ approveFlag: true });
+      this.setState({ noOfActivities: temp.noOfActivities });
+      console.log('No of activities in approve : ' + temp.noOfActivities);
+    }
+  };
+
+  noApprove = () => {
+    this.setState({ approveFlag: false });
+    this.setState({ activitiesList: [] });
+    this.setState({ cleanFlag: false });
+    this.setState({ washFlag: false });
+    this.setState({ babySittingFlag: false });
+    this.setState({ otherFlag: false });
+
+    db.ref('Users/User1').update({
+      noOfActivities: 0,
+      activityUpdated: false,
+    });
+
+    var activityRef = db.ref('Users/User1');
+    activityRef.update({
+      activity: '',
+    });
+  };
+
+  render() {
+    var activitiesList = this.state.activitiesList;
+    const cleanFlag = this.state.cleanFlag;
+    const washFlag = this.state.washFlag;
+    const babySittingFlag = this.state.babySittingFlag;
+    const otherFlag = this.state.otherFlag;
+    const otherActivity = this.state.otherActivity;
+    const approveFlag = this.state.approveFlag;
+    const secretCodeFlag = this.state.secretCodeFlag;
+    var flag = true;
+    if(secretCodeFlag === false){
+      return(
+        <View>
+            <Text> Please set the secret code in Parent Profile screen to approve the activities </Text>
+        </View>
+      )
+    }
+    else if (this.state.activityUpdated) {
+      return (
+        <View style={styles.container}>
+          <SafeAreaView style={styles.droidSafeArea} />
+          {cleanFlag ? (
+            <View style={styles.toggleView}>
+              <Text> Clean </Text>
+              <ToggleSwitch
+                style={{ marginLeft: 50 }}
+                size="small"
+                disabled={!this.state.approveEnabled}
+                onColor="cyan"
+                isOn={this.state.isOnCleanToggleSwitch}
+                onToggle={(isOnCleanToggleSwitch) => {
+                  this.setState({ isOnCleanToggleSwitch });
+                  this.onToggle(isOnCleanToggleSwitch, 'clean');
+                }}
+              />
+            </View>
+          ) : undefined}
+
+          {washFlag ? (
+            <View style={styles.toggleView}>
+              <Text> Wash </Text>
+              <ToggleSwitch
+                style={{ marginLeft: 50 }}
+                size="small"
+                disabled={!this.state.approveEnabled}
+                onColor="orange"
+                isOn={this.state.isOnWashToggleSwitch}
+                onToggle={(isOnWashToggleSwitch) => {
+                  this.setState({ isOnWashToggleSwitch });
+                  this.onToggle(isOnWashToggleSwitch, 'wash');
+                }}
+              />
+            </View>
+          ) : undefined}
+
+          {babySittingFlag ? (
+            <View style={styles.toggleView}>
+              <Text> Baby Sitting </Text>
+              <ToggleSwitch
+                style={{ marginLeft: 10 }}
+                size="small"
+                disabled={!this.state.approveEnabled}
+                onColor="#2196F3"
+                isOn={this.state.isOnBabyToggleSwitch}
+                onToggle={(isOnBabyToggleSwitch) => {
+                  this.setState({ isOnBabyToggleSwitch });
+                  this.onToggle(isOnBabyToggleSwitch, 'baby');
+                }}
+              />
+            </View>
+          ) : undefined}
+
+          {otherFlag ? (
+            <View style={styles.toggleView}>
+              <Text> {this.state.otherActivity} </Text>
+              <ToggleSwitch
+                style={{ marginLeft: 42 }}
+                onColor="#2196F3"
+                disabled={!this.state.approveEnabled}
+                size="small"
+                isOn={this.state.isOnOthersToggleSwitch}
+                onToggle={(isOnOthersToggleSwitch) => {
+                  this.setState({ isOnOthersToggleSwitch });
+                  //this.setState({others: this.state.others1 })
+                  this.onToggle(isOnOthersToggleSwitch, 'others');
+                }}
+              />
+            </View>
+          ) : undefined}
+
+          <TouchableOpacity
+            style={styles.buttonApprove}
+            disabled={!this.state.approveEnabled}
+            onPress={() => {
+              this.checkActivities();
+              this.approve();
+            }}>
+            <Text style={{ color: 'black' }}> Approve </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.buttonApprove}
+            disabled={!this.state.approveEnabled}
+            onPress={() => {
+              this.noApprove();
+            }}>
+            <Text style={{ color: 'black' }}> Don't Approve </Text>
+          </TouchableOpacity>
+
+          {approveFlag ? (
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ marginTop: 20 }}> Enter secret code </Text>
+              <TextInput
+                style={styles.inputBox}
+                secureTextEntry={true}
+                placeholder="Secret Code"
+                value={this.state.code}
+                onChangeText={(text) => {
+                  this.setState({ code: text });
+                }}
+              />
+
+              <TouchableOpacity
+                style={styles.buttonApprove}
+                onPress={() => this.submit()}>
+                <Text> Submit </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text> </Text>
+          )}
+        </View>
+      );
+    } else {
+      return (
+        <View
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <SafeAreaView style={styles.droidSafeArea} />
+          <Text> No Activities to approve </Text>
+        </View>
+      );
+    }
+  }
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'teal',
+  },
+  text: {
+    color: 'black',
+    textAlign: 'center',
+  },
+  list: {
+    alignItems: 'left',
+    marginTop: 10,
+  },
+  buttonApprove: {
+    borderRadius: 20,
+    borderWidth: 4,
+    width: 150,
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  inputBox: {
+    marginTop: 5,
+    width: '60%',
+    alignSelf: 'left',
+    height: 40,
+    textAlign: 'center',
+    borderWidth: 2,
+    outline: 'none',
+    backgroundColor: 'white',
+  },
+  toggleView: {
+    flexDirection: 'row',
+    marginTop: 20,
+    marginLeft: 100,
+  },
+  buttonApprove: {
+    borderRadius: 20,
+    borderWidth: 4,
+    width: 150,
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#15193c',
+  },
+  droidSafeArea: {
+    marginTop:
+      Platform.OS === 'android' ? StatusBar.currentHeight : RFValue(35),
+  },
+});
